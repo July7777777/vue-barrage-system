@@ -2,7 +2,7 @@
   <div class="app">
     <header>
       <h1>🎯 Vue 3 高性能动态弹幕系统</h1>
-      <p>支持滚动/顶部/底部弹幕 · 自动避让 · 节流控制 · 暂停播放</p>
+      <p>支持滚动/顶部/底部弹幕 · 自动避让 · 节流控制</p>
     </header>
 
     <!-- 弹幕区域 -->
@@ -10,19 +10,26 @@
 
     <!-- 控制面板 -->
     <div class="panel">
-      <input v-model="text" placeholder="输入内容" @keyup.enter="send" />
+      <input
+        v-model="text"
+        placeholder="输入内容"
+        @keyup.enter="send"
+      />
       <select v-model="type">
         <option value="scroll">滚动</option>
         <option value="top">顶部</option>
         <option value="bottom">底部</option>
       </select>
-      <input v-model="color" placeholder="颜色" />
+      <input
+        v-model="color"
+        placeholder="颜色"
+      />
       <button @click="send">发送</button>
       <button @click="welcome">欢迎新人</button>
     </div>
 
     <footer>
-      <p>🖱️ 鼠标悬停暂停 | 🔺 视口外自动暂停 | 🚀 高性能渲染</p>
+      <p>🚀 高性能渲染 | 🎨 支持自定义颜色 | ⚡ 智能轨道分配</p>
     </footer>
   </div>
 </template>
@@ -100,7 +107,7 @@
     padding: 10px;
     border-radius: 6px;
     border: 1px solid #444;
-    background: #111;
+    background: #222;
     color: #fff;
   }
 
