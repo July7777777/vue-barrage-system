@@ -3,29 +3,33 @@
     class="barrage-container"
     ref="containerRef"
   >
-    <div class="barrage-item bullet-waiting">等待弹幕</div>
-    <div class="barrage-item bullet-done">已发送弹幕</div>
-    <div class="barrage-item bullet-running">正在发送弹幕</div>
-    <!-- 弹幕项 -->
-    <!-- <div
-      v-for="(item, index) in items"
-      :key="item.id"
+    <div
+      v-for="track in tracks"
+      :key="track"
+      class="barrage-track"
+    ></div>
+    <div
+      v-for="i in items"
+      :key="i.id"
+      :id="`${i.id}`"
+      :class="`bullet-${i.state}`"
       class="barrage-item"
-      :class="`type-${item.type}`"
-      :style="getItemStyle(item)"
-      @animationend="onAnimationEnd(index)"
-      @webkitAnimationEnd="onAnimationEnd(index)"
+      :style="`color: ${i.color};top:${i.track !== undefined ? i.track * TRACK_HEIGHT : 0}px`"
+      @animationend="onAnimationEnd(i.id)"
     >
-      {{ item.text }}
-    </div> -->
+      {{ i.text }}
+    </div>
+    <div class="barrage-item barrage-top">测试顶部</div>
+    <div class="barrage-item barrage-bottom">测试底部</div>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { ref, onMounted, onUnmounted, computed } from 'vue';
+  import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 
   // === 类型定义 ===
   type BarrageType = 'scroll' | 'top' | 'bottom';
+  type BarrageState = 'waiting' | 'running' | 'done';
   interface BarrageItem {
     id: number;
     text: string;
@@ -34,71 +38,81 @@
     type: BarrageType;
     duration?: number;
     timestamp: number;
-    top?: number;
+    track: number | undefined;
+    state?: BarrageState;
   }
 
   // === 响应式数据 ===
   const items = ref<BarrageItem[]>([]);
+  const waitingQueue = ref<BarrageItem[]>([]); // 等待队列
   const containerRef = ref<HTMLElement | null>(null);
   let idCounter = 0; // 用于生成唯一ID
+  let checkQueueTimer: number | undefined; // 检查队列的定时器
+  let trackStates: boolean[] = []; // 轨道状态数组，true表示空闲，false表示占用
 
   // === 配置常量 ===
   const MAX_BARRAGES = 30; // 最大显示数量
   const MAX_PER_SECOND = 8; // 每秒最多显示弹幕数
-  const TRACK_HEIGHT = 30; // 轨道高度
   const CONTAINER_HEIGHT = 200; // 容器高度
   const ANIM_MIN = 8; // 最小动画时长
   const ANIM_MAX = 12; // 最大动画时长
+  const TRACK_HEIGHT = 32; // 轨道高度
+  const CHECK_INTERVAL = 200; // 检查队列间隔时间(ms)
+  const ANIMATION_DURATION = 5000; // 动画bullet-running的时长（毫秒）
 
   // === 计算轨道数 ===
-  const trackCount = computed(() => Math.floor(CONTAINER_HEIGHT / TRACK_HEIGHT));
+  const containerRefHeight = computed(() => containerRef.value?.clientHeight || TRACK_HEIGHT);
+  const containerRefWidth = computed(() => containerRef.value?.clientWidth || 0);
+  const trackCount = computed(() => Math.floor(containerRefHeight.value / TRACK_HEIGHT));
+  const tracks = computed(() => Array.from({ length: trackCount.value }, () => 1));
 
-  // === 获取可用轨道（防重叠）===
-  const getAvailableTrack = (): number => {
-    const occupied: number[] = [];
-
-    // 收集已占用的轨道
-    items.value
-      .filter(i => i.type === 'scroll' && i.top !== undefined)
-      .forEach(i => {
-        const trackIndex = Math.floor((i.top as number) / TRACK_HEIGHT);
-        occupied.push(trackIndex);
-      });
-
-    // 尝试找到空闲轨道
-    for (let i = 0; i < trackCount.value; i++) {
-      if (!occupied.includes(i)) {
-        return i * TRACK_HEIGHT + TRACK_HEIGHT / 2;
-      }
-    }
-
-    // 如果没有空闲轨道，随机选择一个
-    return Math.floor(Math.random() * trackCount.value) * TRACK_HEIGHT + TRACK_HEIGHT / 2;
+  // 初始化轨道状态
+  const initTrackStates = () => {
+    trackStates = new Array(trackCount.value).fill(true); // 初始所有轨道都空闲
   };
 
-  // === 节流控制 ===
-  let lastClearTime = Date.now();
-  let burstCount = 0;
+  // 监听轨道数量变化，重新初始化轨道状态
+  watch(trackCount, () => {
+    initTrackStates();
+  });
 
-  // === 添加弹幕 ===
+  // === 获取可用轨道（防重叠）===
+  const getAvailableTrack = (): number[] => {
+    // 使用reduce方法构建只包含数字的数组
+    return trackStates.reduce((available: number[], isFree: boolean, index: number) => {
+      if (isFree) {
+        available.push(index);
+      }
+      return available;
+    }, []);
+  };
+
+  // 计算弹幕释放轨道的延迟时间
+  const calculateReleaseDelay = (id: number): number => {
+    const w1 = containerRefWidth.value; // 轨道容器宽度
+    const w2 = document.getElementById(`${id}`)?.getBoundingClientRect().width || 0; // 获取弹幕元素宽度
+    const delay = (w2 / (w1 + w2)) * ANIMATION_DURATION; // 计算弹幕完全进入屏幕时间
+    return delay;
+  };
+
+  // 释放轨道
+  const releaseTrack = (trackIndex: number) => {
+    if (trackIndex >= 0 && trackIndex < trackStates.length) {
+      trackStates[trackIndex] = true;
+    }
+  };
+
+  // 占用轨道
+  const occupyTrack = (trackIndex: number) => {
+    if (trackIndex >= 0 && trackIndex < trackStates.length) {
+      trackStates[trackIndex] = false;
+    }
+  };
+
+  // 添加弹幕到等待队列
   const addBarrage = (text: string, options: Partial<BarrageItem> = {}) => {
-    // 节流控制，限制每秒发送数量
     const now = Date.now();
-    if (now - lastClearTime > 1000) {
-      burstCount = 0;
-      lastClearTime = now;
-    }
-
-    if (burstCount >= MAX_PER_SECOND) {
-      return; // 超过限制，忽略本次弹幕
-    }
-
-    burstCount++;
-
-    // 解构配置，设置默认值
     const { color = '#ffffff', fontSize = 16, type = 'scroll', duration } = options;
-
-    // 创建新弹幕对象
     const newItem: BarrageItem = {
       id: idCounter++,
       text,
@@ -107,44 +121,79 @@
       type,
       duration,
       timestamp: now,
+      state: 'waiting',
+      track: undefined,
     };
 
-    // 为滚动弹幕分配轨道
-    if (type === 'scroll') {
-      newItem.top = getAvailableTrack();
-    }
-
-    // FIFO 清理机制，保持弹幕数量在合理范围
-    if (items.value.length >= MAX_BARRAGES) {
-      const oldestScrollItemIndex = items.value.findIndex(i => i.type === 'scroll');
-      if (oldestScrollItemIndex !== -1) {
-        items.value.splice(oldestScrollItemIndex, 1);
-      } else {
-        items.value.shift(); // 移除最早的弹幕
-      }
-    }
-
-    // 添加新弹幕
-    items.value.push(newItem);
-
-    // 自动清理滚动弹幕 - 添加清理时间缓冲区
-    if (type === 'scroll') {
-      const cleanDuration = (duration || ANIM_MIN + Math.random() * (ANIM_MAX - ANIM_MIN)) + 3; // 增加3秒缓冲区
+    // 对于固定位置的弹幕(top/bottom)，直接添加到显示列表
+    if (type !== 'scroll') {
+      items.value.push(newItem);
+      // 固定位置弹幕3秒后自动移除
       setTimeout(() => {
-        const index = items.value.findIndex(i => i.id === newItem.id);
+        const index = items.value.findIndex(item => item.id === newItem.id);
         if (index !== -1) {
           items.value.splice(index, 1);
         }
-      }, cleanDuration * 1000);
+      }, 3000);
+    } else {
+      // 滚动弹幕加入等待队列
+      waitingQueue.value.push(newItem);
     }
   };
 
+  // 从等待队列发送弹幕
+  const sendFromQueue = () => {
+    // 检查是否达到最大显示数量
+    if (items.value.length >= MAX_BARRAGES) {
+      return;
+    }
+
+    // 检查是否有等待的弹幕
+    if (waitingQueue.value.length === 0) {
+      return;
+    }
+    let trackIndex: number | undefined;
+    // 尝试获取可用轨道
+    const AvailableTrack = getAvailableTrack();
+    if (AvailableTrack.length === 0) {
+      return; // 没有可用轨道，稍后再试
+    } else {
+      // 选择第一个可用轨道
+      // 随机选择一个可用轨道
+      trackIndex = AvailableTrack[Math.floor(Math.random() * AvailableTrack.length)];
+    }
+
+    // 占用轨道
+    occupyTrack(trackIndex as number);
+
+    // 从队列取出第一个弹幕
+    const barrage = waitingQueue.value.shift()!;
+    barrage.track = trackIndex;
+    barrage.state = 'running';
+
+    //添加到显示列表
+    items.value.push(barrage);
+
+    // 等待DOM更新后计算元素宽度并设置轨道释放时间
+    nextTick(() => {
+      const delay = calculateReleaseDelay(barrage.id);
+      // 弹幕完全进入屏幕后释放轨道
+      setTimeout(() => {
+        releaseTrack(trackIndex as number);
+      }, delay);
+    });
+  };
+
   // === 动画结束清理 ===
-  const onAnimationEnd = (index: number) => {
-    // 确保索引有效
-    if (index >= 0 && index < items.value.length) {
+  const onAnimationEnd = (id: number) => {
+    const index = items.value.findIndex(item => item.id === id);
+    if (index !== -1) {
       const item = items.value[index];
       if (item?.type === 'scroll') {
+        // 确保轨道被释放
+        if (item.track !== undefined) {
+          releaseTrack(item.track);
+        }
         items.value.splice(index, 1);
       }
     }
@@ -157,11 +206,11 @@
       fontSize: (item.fontSize || 16) + 'px',
     };
 
-    if (item.type === 'scroll' && item.top !== undefined) {
+    if (item.type === 'scroll' && item.track !== undefined) {
       const duration = item.duration || ANIM_MIN + Math.random() * (ANIM_MAX - ANIM_MIN);
       return {
         ...base,
-        top: item.top + 'px',
+        track: item.track + 'px',
         animationDuration: duration + 's',
         willChange: 'transform' as const,
         backfaceVisibility: 'hidden' as const,
@@ -179,6 +228,12 @@
   let interval: number | undefined;
 
   onMounted(() => {
+    // 初始化轨道状态
+    initTrackStates();
+
+    // 启动检查队列定时器
+    checkQueueTimer = window.setInterval(sendFromQueue, CHECK_INTERVAL);
+
     // 模拟实时弹幕数据
     const messages = ['欢迎来到直播间', '666', 'Vue 3 太强了', '加油！', '打call', '主播好棒'];
     const colors = ['#f60', '#0f0', '#0ff', '#f0f', '#ff0', '#fff'];
@@ -202,6 +257,9 @@
     if (interval !== undefined) {
       clearInterval(interval);
     }
+    if (checkQueueTimer !== undefined) {
+      clearInterval(checkQueueTimer);
+    }
   });
 
   // 暴露添加弹幕方法供父组件调用
@@ -209,11 +267,24 @@
 </script>
 
 <style scoped>
+  .barrage-track {
+    width: 100%;
+    height: 32px;
+  }
+
+  .barrage-track:nth-child(even) {
+    background-color: rgba(151, 151, 151, 0.1);
+  }
+
+  .barrage-track:nth-child(odd) {
+    background-color: rgba(32, 32, 32, 0.05);
+  }
+
   .barrage-container {
     position: relative;
     width: 100%;
     height: 200px;
-    /* overflow: hidden; */
+    overflow: hidden;
     background: rgba(0, 0, 0, 0.7);
     border-radius: 12px;
     margin: 20px 0;
@@ -222,6 +293,7 @@
   }
 
   .barrage-item {
+    top: 0;
     position: absolute;
     white-space: nowrap;
     padding: 4px 12px;
@@ -231,88 +303,54 @@
     z-index: 1;
   }
 
+  .barrage-top {
+    top: 0px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .barrage-bottom {
+    top: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
   .bullet-waiting {
     left: 100%;
   }
 
   .bullet-done {
     left: 0;
-    transform: translateX(-100%);
-  }
-
-  @keyframes running {
-    0% {
-      left: 100%;
-      transform: translate3d(0, 0, 0);
-    }
-
-    100% {
-      left: 0;
-      transform: translate3d(-100%, 0, 0);
-    }
+    transform: translateX(-80%);
   }
 
   .bullet-running {
     animation: running 5s linear forwards;
   }
 
-  /*
-  .type-scroll {
-    animation: barrageMove linear forwards;
-    left: 100%;
-    transform: translateY(-50%);
-  }
-
-  .type-top,
-  .type-bottom {
-    left: 50%;
-    z-index: 10;
-    font-weight: bold;
-  }
-
-  .type-top {
-    animation: fadeInOut 3s ease-in-out;
-  }
-
-  .type-bottom {
-    animation: fadeInOut 3s ease-in-out;
-  }
-
-  @keyframes barrageMove {
+  @keyframes running {
     0% {
-      transform: translateY(-50%);
+      left: 100%;
+      transform: translate3d(0, 0, 0);
       opacity: 0;
+      /* 开始时完全透明 */
     }
 
     10% {
       opacity: 1;
+      /* 10%进度时完全显示 */
     }
 
     90% {
       opacity: 1;
+      /* 90%进度时保持完全显示 */
     }
 
     100% {
-      transform: translateX(calc(-100% - 100vw)) translateY(-50%);
+      left: 0;
+      transform: translate3d(-80%, 0, 0);
       opacity: 0;
+      /* 结束时完全透明 */
     }
   }
-
-  @keyframes fadeInOut {
-    0% {
-      opacity: 0;
-    }
-
-    20% {
-      opacity: 1;
-    }
-
-    80% {
-      opacity: 1;
-    }
-
-    100% {
-      opacity: 0;
-    }
-  } */
 </style>
