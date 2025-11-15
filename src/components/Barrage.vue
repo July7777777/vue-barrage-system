@@ -8,13 +8,14 @@
       :key="track"
       class="barrage-track"
     ></div>
+
     <div
       v-for="i in items"
       :key="i.id"
       :id="`${i.id}`"
-      :class="`bullet-${i.state}`"
+      :class="`bullet-${i.state} ${getColorful(i.color) ? 'colorful' : ''}`"
       class="barrage-item"
-      :style="`color: ${i.color};top:${i.track !== undefined ? i.track * TRACK_HEIGHT : 0}px`"
+      :style="`color: ${getColor(i.color)};top:${i.track !== undefined ? i.track * TRACK_HEIGHT : 0}px`"
       @animationend="onAnimationEnd(i.id)"
     >
       {{ i.text }}
@@ -59,7 +60,21 @@
   const TRACK_HEIGHT = 32; // 轨道高度
   const CHECK_INTERVAL = 200; // 检查队列间隔时间(ms)
   const ANIMATION_DURATION = 5000; // 动画bullet-running的时长（毫秒）
-
+  const ColorRegex = /^(?:#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgb|hsl)a?\s*$$\s*(?:\d{1,3}%?\s*,\s*){2}\d{1,3}%?(?:\s*,\s*(?:0?\.\d+|1|0))?\s*$$|(?:aliceblue|antiquewhite|...|yellowgreen))$/i;
+  const colorArr = ['#ffffff', '#fe0302', '#ff7204', '#ffaa02', '#ffd302', '#ffff00', '#a0ee00', '#00cd00', '#019899', '#4266be', '#89d5ff', '#cc0273', '#222222', '#9b9b9b',];
+  const ChineseColor = {
+    红: '#ff0000',
+    橙: '#ff8000',
+    黄: '#ffff00',
+    绿: '#00ff00',
+    青: '#00ffff',
+    蓝: '#0000ff',
+    紫: '#ff00ff',
+    靛: '#8000ff',
+    黑: '#222222',
+    灰: '#9b9b9b',
+    白: '#ffffff',
+  };
   // === 计算轨道数 ===
   const containerRefHeight = computed(() => containerRef.value?.clientHeight || TRACK_HEIGHT);
   const containerRefWidth = computed(() => containerRef.value?.clientWidth || 0);
@@ -200,28 +215,29 @@
   };
 
   // === 样式计算 ===
-  const getItemStyle = (item: BarrageItem) => {
-    const base = {
-      color: item.color || '#fff',
-      fontSize: (item.fontSize || 16) + 'px',
-    };
-
-    if (item.type === 'scroll' && item.track !== undefined) {
-      const duration = item.duration || ANIM_MIN + Math.random() * (ANIM_MAX - ANIM_MIN);
-      return {
-        ...base,
-        track: item.track + 'px',
-        animationDuration: duration + 's',
-        willChange: 'transform' as const,
-        backfaceVisibility: 'hidden' as const,
-      };
-    } else if (item.type === 'top') {
-      return { ...base, top: '12px', left: '50%', transform: 'translateX(-50%)' };
-    } else if (item.type === 'bottom') {
-      return { ...base, bottom: '12px', left: '50%', transform: 'translateX(-50%)' };
+  const getColorful = (color: string = '#fff') => {
+    if (color === 'colorful') {
+      return true;
     }
-
-    return base;
+    if (color === '彩') {
+      return true;
+    }
+    if (color == '99') {
+      return true;
+    }
+    return false;
+  };
+  const getColor = (color: string = '#fff') => {
+    if (ColorRegex.test(color)) {
+      return color;
+    }
+    if (0 <= Number(color) && Number(color) <= 14) {
+      return colorArr[Number(color)];
+    }
+    if (ChineseColor.hasOwnProperty(color)) {
+      return ChineseColor[color as keyof typeof ChineseColor];
+    }
+    return '#fff';
   };
 
   // === 模拟实时弹幕 ===
@@ -236,7 +252,7 @@
 
     // 模拟实时弹幕数据
     const messages = ['欢迎来到直播间', '666', 'Vue 3 太强了', '加油！', '打call', '主播好棒'];
-    const colors = ['#f60', '#0f0', '#0ff', '#f0f', '#ff0', '#fff'];
+    const colors = ['#f60', '#0f0', '#0ff', '#f0f', '#ff0', '#fff', '99', '红', '橙', '黄', '绿', '青', '蓝', '靛', '紫'];
 
     // 定时发送模拟弹幕
     const sendRandomBarrage = () => {
@@ -267,6 +283,45 @@
 </script>
 
 <style scoped>
+  .unUse {
+    /* 预览 */
+    background: linear-gradient(90deg,
+        /* 汉字对应颜色 */
+        #ff0000,
+        /* 红 */
+        #ff8000,
+        /* 橙 */
+        #ffff00,
+        /* 黄 */
+        #00ff00,
+        /* 绿 */
+        #00ffff,
+        /* 青 */
+        #0000ff,
+        /* 蓝 */
+        #8000ff,
+        /* 靛 */
+        #ff00ff,
+        /* 紫 */
+
+        /* B站弹幕颜色顺序  0是白  99是彩色 */
+        #ffffff,
+        #fe0302,
+        #ff7204,
+        #ffaa02,
+        #ffd302,
+        #ffff00,
+        #a0ee00,
+        #00cd00,
+        #019899,
+        #4266be,
+        #89d5ff,
+        #cc0273,
+        #222222,
+        #9b9b9b,
+      );
+  }
+
   .barrage-track {
     width: 100%;
     height: 32px;
@@ -283,6 +338,7 @@
   .barrage-container {
     position: relative;
     width: 100%;
+    /* 根据需要更改 */
     height: 200px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.7);
@@ -298,9 +354,22 @@
     white-space: nowrap;
     padding: 4px 12px;
     border-radius: 20px;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+    /* text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9); */
+    text-shadow: 1px 0 1px #000000, 0 1px 1px #000000, 0 -1px 1px #000000, -1px 0 1px #000000;
     pointer-events: none;
     z-index: 1;
+  }
+
+  .colorful {
+    /* font-size: 24px; */
+    font-weight: bold;
+    color: rgb(255, 255, 255);
+    -webkit-text-fill-color: rgb(255, 255, 255);
+    -webkit-text-stroke: 3px transparent;
+    background-clip: text;
+    text-shadow: none !important;
+    background-image: linear-gradient(to right, #ff69b4, #00bfff);
+    background-size: cover;
   }
 
   .barrage-top {
