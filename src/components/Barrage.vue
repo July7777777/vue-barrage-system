@@ -52,11 +52,12 @@
   let trackStates: boolean[] = []; // 轨道状态数组，true表示空闲，false表示占用
 
   // === 配置常量 ===
-  const MAX_BARRAGES = 30; // 最大显示数量
   const MAX_PER_SECOND = 8; // 每秒最多显示弹幕数
   const CONTAINER_HEIGHT = 200; // 容器高度
   const ANIM_MIN = 8; // 最小动画时长
   const ANIM_MAX = 12; // 最大动画时长
+  // 上边四个属性未使用
+  const MAX_BARRAGES = 300; // 最大显示数量
   const TRACK_HEIGHT = 32; // 轨道高度
   const CHECK_INTERVAL = 200; // 检查队列间隔时间(ms)
   const ANIMATION_DURATION = 5000; // 动画bullet-running的时长（毫秒）
@@ -215,17 +216,9 @@
   };
 
   // === 样式计算 ===
-  const getColorful = (color: string = '#fff') => {
-    if (color === 'colorful') {
-      return true;
-    }
-    if (color === '彩') {
-      return true;
-    }
-    if (color == '99') {
-      return true;
-    }
-    return false;
+  const getColorful = (color: string = '#fff'): boolean => {
+    const colorfulKeywords = ['colorful', '彩', '99'];
+    return colorfulKeywords.includes(color);
   };
   const getColor = (color: string = '#fff') => {
     if (ColorRegex.test(color)) {
