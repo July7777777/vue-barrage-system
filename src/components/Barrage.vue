@@ -3,11 +3,11 @@
     class="barrage-container"
     ref="containerRef"
   >
-    <div
+    <!-- <div
       v-for="track in tracks"
       :key="track"
       class="barrage-track"
-    ></div>
+    ></div> -->
 
     <div
       v-for="i in items"
@@ -20,8 +20,8 @@
     >
       {{ i.text }}
     </div>
-    <div class="barrage-item barrage-top">测试顶部</div>
-    <div class="barrage-item barrage-bottom">测试底部</div>
+    <!-- <div class="barrage-item barrage-top">测试顶部</div>
+    <div class="barrage-item barrage-bottom">测试底部</div> -->
   </div>
 </template>
 
@@ -58,10 +58,60 @@
   const ANIM_MAX = 12; // 最大动画时长
   // 上边四个属性未使用
   const MAX_BARRAGES = 300; // 最大显示数量
-  const TRACK_HEIGHT = 32; // 轨道高度
+  const TRACK_HEIGHT = 44; // 轨道高度 36＋8 ；css barrage-track 属性记得保持一致
   const CHECK_INTERVAL = 200; // 检查队列间隔时间(ms)
-  const ANIMATION_DURATION = 5000; // 动画bullet-running的时长（毫秒）
-  const ColorRegex = /^(?:#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgb|hsl)a?\s*$$\s*(?:\d{1,3}%?\s*,\s*){2}\d{1,3}%?(?:\s*,\s*(?:0?\.\d+|1|0))?\s*$$|(?:aliceblue|antiquewhite|...|yellowgreen))$/i;
+  const ANIMATION_DURATION = 10000; // 动画bullet-running的时长（毫秒）  bullet-running 动画中的时间也要改
+  // const ColorRegex = /^(?:#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgb|hsl)a?\s*$$\s*(?:\d{1,3}%?\s*,\s*){2}\d{1,3}%?(?:\s*,\s*(?:0?\.\d+|1|0))?\s*$$|(?:aliceblue|antiquewhite|...|yellowgreen))$/i;
+  // 颜色正则表达式
+  const ColorRegex = /^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\(\s*(?:\d{1,3}%?|\d*\.\d+%?)\s*,\s*(?:\d{1,3}%?|\d*\.\d+%?)\s*,\s*(?:\d{1,3}%?|\d*\.\d+%?)(?:\s*,\s*(?:0?\.?\d+|1))?\\s*\))$/;
+  // 英文
+  const commonEnglishColors = [
+    // 基础颜色（12种）
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "blue",
+    "purple",
+    "pink",
+    "brown",
+    "black",
+    "white",
+    "gray",      // 美式拼写
+    "grey",      // 英式拼写（可选保留）
+
+    // 常用扩展色
+    "lime",
+    "cyan",
+    "magenta",
+    "navy",
+    "teal",
+    "olive",
+    "maroon",
+    "silver",
+    "gold",
+    "violet",
+    "indigo",
+    "turquoise",
+    "coral",
+    "salmon",
+    "khaki",
+    "beige",
+    "tan",
+    "crimson",
+    "orchid",
+    "plum",
+    "lavender",
+    "mint",
+    "peach",
+    "amber",
+    "charcoal",
+    "ivory",
+    "fuchsia"
+  ];
+
+  // 如果你希望只保留美式拼写（去掉 grey）：
+  // const colors = commonEnglishColors.filter(c => c !== 'grey');
   const colorArr = ['#ffffff', '#fe0302', '#ff7204', '#ffaa02', '#ffd302', '#ffff00', '#a0ee00', '#00cd00', '#019899', '#4266be', '#89d5ff', '#cc0273', '#222222', '#9b9b9b',];
   const ChineseColor = {
     红: '#ff0000',
@@ -128,9 +178,9 @@
   // 添加弹幕到等待队列
   const addBarrage = (text: string, options: Partial<BarrageItem> = {}) => {
     const now = Date.now();
-    const { color = '#ffffff', fontSize = 16, type = 'scroll', duration } = options;
+    const { color = '#ffffff', fontSize = 16, type = 'scroll', duration, id } = options;
     const newItem: BarrageItem = {
-      id: idCounter++,
+      id: id || idCounter++,
       text,
       color,
       fontSize,
@@ -221,12 +271,19 @@
     return colorfulKeywords.includes(color);
   };
   const getColor = (color: string = '#fff') => {
+
     if (ColorRegex.test(color)) {
       return color;
     }
+    // 英文颜色
+    if (commonEnglishColors.includes(color)) {
+      return color;
+    }
+    // 数字颜色
     if (0 <= Number(color) && Number(color) <= 14) {
       return colorArr[Number(color)];
     }
+    // 中文颜色
     if (ChineseColor.hasOwnProperty(color)) {
       return ChineseColor[color as keyof typeof ChineseColor];
     }
@@ -244,18 +301,18 @@
     checkQueueTimer = window.setInterval(sendFromQueue, CHECK_INTERVAL);
 
     // 模拟实时弹幕数据
-    const messages = ['欢迎来到直播间', '666', 'Vue 3 太强了', '加油！', '打call', '主播好棒'];
-    const colors = ['#f60', '#0f0', '#0ff', '#f0f', '#ff0', '#fff', '99', '红', '橙', '黄', '绿', '青', '蓝', '靛', '紫'];
+    // const messages = ['欢迎来到直播间', '666', 'Vue 3 太强了', '加油！', '打call', '主播好棒'];
+    // const colors = ['#f60', '#0f0', '#0ff', '#f0f', '#ff0', '#fff', '99', '红', '橙', '黄', '绿', '青', '蓝', '靛', '紫'];
 
     // 定时发送模拟弹幕
-    const sendRandomBarrage = () => {
-      const text = messages[Math.floor(Math.random() * messages.length)];
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      addBarrage(text as string, { color, type: 'scroll' });
-    };
+    // const sendRandomBarrage = () => {
+    //   const text = messages[Math.floor(Math.random() * messages.length)];
+    //   const color = colors[Math.floor(Math.random() * colors.length)];
+    //   addBarrage(text as string, { color, type: 'scroll' });
+    // };
 
     // 随机间隔发送弹幕
-    interval = window.setInterval(sendRandomBarrage, Math.random() * 3000 + 1000);
+    // interval = window.setInterval(sendRandomBarrage, Math.random() * 3000 + 1000);
 
     // 显示欢迎语
     addBarrage('🎉 欢迎使用高性能弹幕系统！', { color: '#ff0', type: 'top', fontSize: 20 });
@@ -317,7 +374,8 @@
 
   .barrage-track {
     width: 100%;
-    height: 32px;
+    /* 轨道高度 */
+    height: 44px;
   }
 
   .barrage-track:nth-child(even) {
@@ -332,20 +390,23 @@
     position: relative;
     width: 100%;
     /* 根据需要更改 */
-    height: 200px;
+    height: 33%;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.7);
+    /* background: rgba(0, 0, 0, 0.7); */
     border-radius: 12px;
-    margin: 20px 0;
+    /* margin: 20px 0; */
     user-select: none;
-    border: 1px solid #333;
+    /* border: 1px solid #333; */
   }
 
   .barrage-item {
     top: 0;
     position: absolute;
     white-space: nowrap;
+
     padding: 4px 12px;
+    font-size: 36px;
+    /* 36+8=44px */
     border-radius: 20px;
     /* text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9); */
     text-shadow: 1px 0 1px #000000, 0 1px 1px #000000, 0 -1px 1px #000000, -1px 0 1px #000000;
@@ -358,11 +419,14 @@
     font-weight: bold;
     color: rgb(255, 255, 255);
     -webkit-text-fill-color: rgb(255, 255, 255);
-    -webkit-text-stroke: 3px transparent;
+    -webkit-text-stroke: 6px transparent;
     background-clip: text;
+    -webkit-background-clip: text;
     text-shadow: none !important;
     background-image: linear-gradient(to right, #ff69b4, #00bfff);
     background-size: cover;
+
+    /* -webkit-text-fill-color: transparent; */
   }
 
   .barrage-top {
@@ -387,7 +451,7 @@
   }
 
   .bullet-running {
-    animation: running 5s linear forwards;
+    animation: running 10s linear forwards;
   }
 
   @keyframes running {
